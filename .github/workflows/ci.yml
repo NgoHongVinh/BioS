@@ -1,0 +1,90 @@
+name: C++ HPC CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.compiler }}, ${{ matrix.build_type }})
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        compiler:
+          - gcc
+          - clang
+
+        build_type:
+          - Debug
+          - Release
+
+    steps:
+      # --------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # 2. Install dependencies
+      # --------------------------------------------------
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            ${{ matrix.compiler == 'gcc' && 'g++' || 'clang' }}
+
+      # --------------------------------------------------
+      # 3. Select compiler
+      # --------------------------------------------------
+      - name: Configure compiler
+        shell: bash
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            echo "CC=gcc" >> "$GITHUB_ENV"
+            echo "CXX=g++" >> "$GITHUB_ENV"
+          else
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          fi
+
+      # --------------------------------------------------
+      # 4. Configure CMake
+      # --------------------------------------------------
+      - name: Configure CMake
+        run: |
+          cmake \
+            -S . \
+            -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON
+
+      # --------------------------------------------------
+      # 5. Build
+      # --------------------------------------------------
+      - name: Build
+        run: |
+          cmake \
+            --build build \
+            --parallel
+
+      # --------------------------------------------------
+      # 6. Test
+      # --------------------------------------------------
+      - name: Test
+        run: |
+          ctest \
+            --test-dir build \
+            --output-on-failure
